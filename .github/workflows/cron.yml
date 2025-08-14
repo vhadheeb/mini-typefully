@@ -1,0 +1,19 @@
+name: Mini-Typefully Cron
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (GitHub Actions uses UTC)
+  workflow_dispatch:        # allow manual run
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cron endpoint
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$CRON_URL"
+        env:
+          CRON_URL: ${{ secrets.CRON_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
