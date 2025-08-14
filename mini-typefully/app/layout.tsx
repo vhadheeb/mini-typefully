@@ -1,5 +1,6 @@
 import './globals.css';
 import React from 'react';
+import Providers from './providers';
 
 export const metadata = {
   title: 'Mini Typefully',
@@ -13,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="container">
           <h1>Mini Typefully</h1>
           <p className="small">Private tweet scheduler</p>
-          {children}
+          <Providers>{children}</Providers>
         </div>
       </body>
     </html>
