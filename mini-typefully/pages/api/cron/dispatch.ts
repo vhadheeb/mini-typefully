@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabaseAdmin';
 
-// Minimal helper to post a tweet with the user's access token
 async function postTweet(accessToken: string, text: string) {
   const r = await fetch('https://api.twitter.com/2/tweets', {
     method: 'POST',
@@ -16,15 +15,17 @@ async function postTweet(accessToken: string, text: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Safety: don't allow random browsers to trigger this.
-  // Vercel Cron automatically includes this header.
-  if (!req.headers['x-vercel-cron']) {
-    return res.status(401).json({ ok: false, error: 'Not from Vercel Cron' });
+  // Allow: Vercel Cron (x-vercel-cron) OR our secret via Authorization header
+  const fromVercelCron = !!req.headers['x-vercel-cron'];
+  const auth = req.headers['authorization'] || '';
+  const fromSecret = auth === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!fromVercelCron && !fromSecret) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
   const nowIso = new Date().toISOString();
 
-  // 1) Find up to 10 posts that are due right now
   const { data: due, error } = await supabaseAdmin
     .from('scheduled_posts')
     .select('id, content, x_user_id')
@@ -38,7 +39,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const results: any[] = [];
 
   for (const row of due ?? []) {
-    // 2) Load the user's token
     const { data: user, error: uerr } = await supabaseAdmin
       .from('users')
       .select('access_token')
@@ -53,7 +53,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       continue;
     }
 
-    // 3) Try to post
     const { ok, status, json } = await postTweet(user.access_token, row.content);
 
     if (ok) {
@@ -62,7 +61,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .eq('id', row.id);
       results.push({ id: row.id, ok: true, tweet_id: json?.data?.id });
     } else if (status === 401 || status === 403) {
-      // Token expired or app lacks permission: ask user to log in again with write scope
       await supabaseAdmin.from('scheduled_posts')
         .update({ status: 'needs_reauth' })
         .eq('id', row.id);
